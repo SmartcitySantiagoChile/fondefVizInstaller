@@ -1,11 +1,7 @@
 import sys
 import os
 
-if len(sys.argv) < 3:
-    pass
-else:
-    projectPath =  sys.argv[1]
-    projectName = sys.argv[2]
+def processWSGIFile(projectPath, projectName):
 
     wsgiDirPath = '{}/{}'.format(projectPath, projectName)
     wsgiFilePath = '{}/wsgi.py'.format(wsgiDirPath)
@@ -26,3 +22,12 @@ else:
     for line in newLine:
         FILE.write(line)
     FILE.close()
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        pass
+    else: 
+        projectPath =  sys.argv[1]
+        projectName = sys.argv[2]
+
+        processWSGIFile(projectPath, projectName)
