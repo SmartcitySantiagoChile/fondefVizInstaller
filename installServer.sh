@@ -79,9 +79,9 @@ VIRTUAL_ENV_DIR="$PROJECT_DIR"/"$VIRTUAL_ENV_NAME"
 #####################################################################
 
 clone_project=false
-install_packages=false
+install_packages=true
 postgresql_configuration=false
-project_configuration=true
+project_configuration=false
 apache_configuration=false
 
 
@@ -144,24 +144,26 @@ if $install_packages; then
     # install python and pip
     apt-get --yes install python-pip python-dev libpq-dev
     # upgrade pip
-    pip install -U pip
+    sudo -H pip install -U pip
     # install npm
     apt-get --yes install nodejs
     apt-get --yes install npm
     ln -s /usr/bin/nodejs /usr/bin/node
     # install bower
     npm install -g bower
-    bower install --allow-root
 
-    pip install virtualenv
+    sudo -H pip install virtualenv
     cd "$PROJECT_DIR"
     # create virtual env
     sudo -u "$LINUX_USER_NAME" virtualenv "$VIRTUAL_ENV_NAME"
     # activate virtualenv
     source "$VIRTUAL_ENV_DIR"/bin/activate
 
-    # install requirements
-    pip install -r requirements.txt
+    # install bower requirements
+    bower install --allow-root
+
+    # install python requirements
+    sudo -H pip install -r requirements.txt
 
     # move to installation folder
     cd "$INSTALLER_FOLDER"
