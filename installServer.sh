@@ -78,8 +78,8 @@ VIRTUAL_ENV_DIR="$PROJECT_DIR"/"$VIRTUAL_ENV_NAME"
 # CONFIGURATION
 #####################################################################
 
-clone_project=false
-install_packages=true
+clone_project=true
+install_packages=false
 postgresql_configuration=false
 project_configuration=false
 apache_configuration=false
@@ -133,7 +133,7 @@ fi
 if $install_packages; then
 
     apt-get update
-    apt-get upgrade
+    apt-get upgrade --yes
 
     # install dependencies
 
