@@ -80,7 +80,7 @@ Go to the installation folder and execute the next command line.
 
 ```bash
 # run with sudo
-$ sudo bash installServer.sh <SERVER_PUBLIC_IP> <DATABASE_NAME> <POSTGRES_USER> <POSTGRES_USER_PASS> "<DJANGO_SECRET_KEY>"
+$ sudo bash installServer.sh <SERVER_PUBLIC_IP> <DATABASE_NAME> <POSTGRES_USER> <POSTGRES_USER_PASS> <LINUX_USER_NAME> "<DJANGO_SECRET_KEY>"
 ```
 
 When the script ends, you will need to append this machine IP address to `ALLOWED_HOSTS` django variable on the `settings.py` server file.
