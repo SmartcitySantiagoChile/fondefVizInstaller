@@ -78,7 +78,7 @@ VIRTUAL_ENV_DIR="$PROJECT_DIR"/"$VIRTUAL_ENV_NAME"
 # CONFIGURATION
 #####################################################################
 
-clone_project=true
+clone_project=false
 install_packages=false
 postgresql_configuration=false
 project_configuration=false
@@ -163,7 +163,7 @@ if $install_packages; then
     bower install --allow-root
 
     # install python requirements
-    sudo -H pip install -r requirements.txt
+    pip install -r requirements.txt
 
     # move to installation folder
     cd "$INSTALLER_FOLDER"
