@@ -4,36 +4,11 @@
 # COMMAND LINE INPUT
 #####################################################################
 if [ -z "$1" ]; then
-    echo "It was not specified server ip"
-    exit 1 
-fi
-if [ -z "$2" ]; then
-    echo "It was not specified database name"
-    exit 1
-fi
-if [ -z "$3" ]; then
-    echo "It was not specified postgres user name"
-    exit 1
-fi
-if [ -z "$4" ]; then
-    echo "It was not specified postgres user password"
-    exit 1
-fi
-if [ -z "$5" ]; then
     echo "It was not specified linux user name"
     exit 1
 fi
-if [ -z "$6" ]; then
-    echo "It was not specified django secret key"
-    exit 1
-fi
 
-SERVER_IP=$1
-DATABASE_NAME=$2
-POSTGRES_USER=$3
-POSTGRES_PASS=$4
 LINUX_USER_NAME=$5
-DJANGO_SECRET_KEY=$6
 
 # name of github repository
 REPOSITORY_NAME="fondefVizServer"
@@ -53,7 +28,6 @@ unset SCRIPT
 
 # move to installation folder
 cd "$INSTALLER_FOLDER"
-
 
 #####################################################################
 # USER CONFIGURATION
@@ -83,6 +57,7 @@ install_packages=false
 postgresql_configuration=false
 project_configuration=false
 apache_configuration=false
+django_worker_config=true
 
 
 #####################################################################
@@ -120,6 +95,8 @@ if $clone_project; then
     if "$DO_CLONE" ; then
         git clone "$GITHUB_URL"
         chown -R "$LINUX_USER_NAME":"$LINUX_USER_NAME" "$PROJECT_PATH"
+	git submodule init
+	git submodule update
     fi
 
     # move to installation folder
@@ -179,6 +156,21 @@ if $postgresql_configuration; then
   echo ----
   echo ----
 
+  echo "Please enter database name:"
+  while [[ "$DATABASE_NAME" == "" ]] do
+    read DATABASE_NAME
+  done
+
+  echo "Please enter database user name:"
+  while [[ "$DATABASE_USER" == "" ]] do
+    read POSTGRES_USER
+  done
+
+  echo "Please enter database user password:"
+  while [[ "$DATABASE_PASS" == "" ]] do
+    read POSTGRES_PASS
+  done
+
   CREATE_DATABASE=true
   DATABASE_EXISTS=$(sudo -Hiu postgres psql -lqt | cut -d \| -f 1 | grep -w "$DATABASE_NAME")
   if [ "$DATABASE_EXISTS" ]; then
@@ -237,26 +229,24 @@ if $project_configuration; then
   echo "Project configuration"
   echo ----
   echo ----
+
+  echo "We need an IP address to configure Apache web server: "
+  while [[ "$SERVER_IP" == "" ]] do
+    read SERVER_IP
+  done
  
   # configure wsgi
   cd "$INSTALLER_FOLDER"
-  python wsgiConfig.py "$PROJECT_DIR" "$REPOSITORY_NAME"
 
   SETTING_PATH="$PROJECT_DIR"/"$REPOSITORY_NAME"
-  KEYS_PATH="$SETTING_PATH"/keys
 
-  # set secret_key variable
-  SECRET_KEY_FILE="$KEYS_PATH"/secret_key.py
+  CONFIG_FILE_TEMPLATE=.env_template
+  CONFIG_FILE="$PROJECT_DIR"/.env
+  cp "$CONFIG_FILE_TEMPLATE" "$CONFIG_FILE"
   # change parameter
-  echo "SECRET_KEY=\"""$DJANGO_SECRET_KEY""\"" > "$SECRET_KEY_FILE"
-
-  DATABASE_CONFIG_TEMPLATE=./template_database.py
-  DATABASE_CONFIG_FILE="$KEYS_PATH"/database.py
-  cp "$DATABASE_CONFIG_TEMPLATE" "$DATABASE_CONFIG_FILE"
-  # change parameter
-  sed -i -e 's/<DATABASE>/'"$DATABASE_NAME"'/g' "$DATABASE_CONFIG_FILE"
-  sed -i -e 's/<USER>/'"$POSTGRES_USER"'/g' "$DATABASE_CONFIG_FILE"
-  sed -i -e 's/<PASSWORD>/'"$POSTGRES_PASS"'/g' "$DATABASE_CONFIG_FILE"
+  sed -i -e 's/DB_NAME=/DB_NAME='"$DATABASE_NAME"'/g' "$CONFIG_FILE"
+  sed -i -e 's/DB_USER=/DB_USER='"$POSTGRES_USER"'/g' "$CONFIG_FILE"
+  sed -i -e 's/DB_PASS=/DB_PASS='"$POSTGRES_PASS"'/g' "$CONFIG_FILE"
 
   # create folder used by loggers if not exist
   LOG_DIR="$PROJECT_DIR"/"$REPOSITORY_NAME"/logs
@@ -265,13 +255,14 @@ if $project_configuration; then
   chmod 777 "$LOG_DIR"/file.log
 
   # add ip to allowed_hosts list
-  sed -i -e 's/ALLOWED_HOSTS = \[\]/ALLOWED_HOSTS = [u'"'$SERVER_IP'"']/g' "$SETTING_PATH"/settings.py
+  sed -i -e 's/ALLOWED_HOSTS=/ALLOWED_HOSTS='"'$SERVER_IP'"'/g' "$CONFIG_FILE"
 
   # update database models and static files
   source "$VIRTUAL_ENV_DIR"/bin/activate
   python "$PROJECT_DIR"/manage.py migrate
   python "$PROJECT_DIR"/manage.py collectstatic
-  python "$PROJECT_DIR"/manage.py loaddata datasource communes daytypes halfhours operators timeperiods transportmodes 
+  python "$PROJECT_DIR"/manage.py loaddata datasource 
+  python "$PROJECT_DIR"/manage.py loaddata communes daytypes halfhours operators timeperiods transportmodes 
 
   echo ----
   echo ----
@@ -294,11 +285,11 @@ if $apache_configuration; then
   # configure apache 2.4
 
   cd "$INSTALLER_FOLDER"
-  configApache="fondef_viz_server.conf"
+  CONFIG_APACHE="fondef_viz_server.conf"
 
-  python configApache.py "$PROJECT_PATH" "$REPOSITORY_NAME" "$VIRTUAL_ENV_NAME" "$configApache"
+  python configApache.py "$PROJECT_PATH" "$REPOSITORY_NAME" "$VIRTUAL_ENV_NAME" "$CONFIG_APACHE"
   a2dissite 000-default.conf
-  a2ensite "$configApache"
+  a2ensite "$CONFIG_APACHE"
 
   sudo service apache2 restart
 
@@ -309,8 +300,41 @@ if $apache_configuration; then
   echo ----
 fi
 
+
+#####################################################################
+# DJANGO-RQ WORKER SERVICE CONFIGURATION
+#####################################################################
+if $django_worker_config; then
+  echo ----
+  echo ----
+  echo "Django-rq worker service configuration"
+  echo ----
+  echo ----
+
+  cd "$initialPATH"
+
+  # Creates the service unit file and the service script
+  sudo python rqWorkerConfig.py "$PROJECT_DEST/server"
+
+  # Makes the service script executable
+  cd "$PROJECT_DEST/server/rqworkers"
+  sudo chmod 775 djangoRqWorkers.sh
+  cd "$initialPATH"
+
+  # Enables and restarts the service
+  sudo systemctl enable django-worker
+  sudo systemctl daemon-reload
+  sudo systemctl restart django-worker
+
+  echo ----
+  echo ----
+  echo "Django-rq worker service configuration ready"
+  echo ----
+  echo ----
+fi
+
 cd "$INSTALLER_FOLDER"
 
-echo "Installation ready."
-echo "To check that its all ok, enter to $SERVER_IP/admin"
+echo "script finished"
+echo "REMEMBER TO FILL .env FILE WITH VALUES"
 

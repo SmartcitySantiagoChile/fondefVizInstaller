@@ -4,6 +4,9 @@ import os
 def getConfigFileHTTP(projectPath, projectName, virtualEnvName):
     projectDir = "{}/{}".format(projectPath, projectName)
     return '''
+    WSGIApplicationGroup %{GLOBAL}
+    WSGIDaemonProcess ''' + projectName + ''' python-path=''' + projectDir + ''' python-home=''' + projectDir + '''/''' + virtualEnvName + ''' processes=3 threads=100 display-name='srvr-fondef' user='server' group='server'
+
     <VirtualHost *:80>
         # The ServerName directive sets the request scheme, hostname and port that
         # the server uses to identify itself. This is used when creating
@@ -30,7 +33,6 @@ def getConfigFileHTTP(projectPath, projectName, virtualEnvName):
 
         LoadModule wsgi_module /usr/lib/apache2/modules/mod_wsgi.so
 
-        WSGIDaemonProcess ''' + projectName + ''' python-path=''' + projectDir + ''' python-home=''' + projectDir + '''/''' + virtualEnvName + '''
         WSGIProcessGroup ''' + projectName + '''
         WSGIScriptAlias / ''' + projectDir + '''/''' + projectName + '''/wsgi.py
 
@@ -41,7 +43,7 @@ def getConfigFileHTTP(projectPath, projectName, virtualEnvName):
         #LogLevel info ssl:warn
 
         ErrorLog ${APACHE_LOG_DIR}/error.log
-        CustomLog ${APACHE_LOG_DIR}/access.log combined
+        CustomLog ${APACHE_LOG_DIR}/access.log reqtime
 
         # For most configuration files from conf-available/, which are
         # enabled or disabled at a global level, it is possible to
@@ -49,7 +51,45 @@ def getConfigFileHTTP(projectPath, projectName, virtualEnvName):
         # following line enables the CGI configuration for this host only
         # after it has been globally disabled with "a2disconf".
         #Include conf-available/serve-cgi-bin.conf
-    </VirtualHost>'''
+    </VirtualHost>
+    
+
+    <IfModule mod_ssl.c>
+        <VirtualHost *:443>
+            # como es usado por un proxy, necesitamos conectarnos a traves de la ip
+            ServerName adatrap.cl
+            ServerAlias www.adatrap.cl
+
+            SSLCertificateFile /etc/letsencrypt/live/adatrap.cl/cert.pem
+            SSLCertificateKeyFile /etc/letsencrypt/live/adatrap.cl/privkey.pem
+            Include /etc/letsencrypt/options-ssl-apache.conf
+            SSLCertificateChainFile /etc/letsencrypt/live/adatrap.cl/chain.pem
+
+            Alias /static ''' + projectDir + '''/static
+            <Directory ''' + projectDir + '''/static>
+                Require all granted
+            </Directory>
+
+            <Directory ''' + projectDir + '''/''' + projectName + '''>
+                <Files wsgi.py>
+                      Require all granted
+                </Files>
+            </Directory>
+
+            Alias /downloads /es2/downloads
+            <Directory /es2/downloads>
+                Require all granted
+            <Directory>
+            
+            LoadModule wsgi_module /usr/lib/apache2/modules/mod_wsgi.so
+
+            WSGIProcessGroup ''' + projectName + '''
+            WSGIScriptAlias / ''' + projectDir + '''/''' + projectName + '''/wsgi.py
+
+            ErrorLog ${APACHE_LOG_DIR}/error.log
+            CustomLog ${APACHE_LOG_DIR}/access.log reqtime
+       </VirtualHost>   
+    </IfModule>'''
 
 def processApacheConfigFile(projectPath, projectName, virtualEnvName, apacheFileName):
 
