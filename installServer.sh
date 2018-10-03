@@ -4,11 +4,19 @@
 # COMMAND LINE INPUT
 #####################################################################
 if [ -z "$1" ]; then
-    echo "It was not specified linux user name"
-    exit 1
+    read -p "User name was not provided, would you like to use 'server' as user name?(y/n)" -n 1
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]
+    then
+	echo "using user name 'server'"
+        LINUX_USER_NAME="server"
+    else
+	echo "You have to provided an user name"
+        exit 1
+    fi
+else
+    LINUX_USER_NAME=$1
 fi
-
-LINUX_USER_NAME=$5
 
 # name of github repository
 REPOSITORY_NAME="fondefVizServer"
@@ -59,7 +67,6 @@ project_configuration=false
 apache_configuration=false
 django_worker_config=true
 
-
 #####################################################################
 # CLONE PROJECT
 #####################################################################
@@ -109,10 +116,16 @@ fi
 
 if $install_packages; then
 
+    # ssl 
+    apt-get update
+    apt-get --yes install software-properties-common
+    sudo add-apt-repository ppa:certbot/certbot -y
+
     apt-get update
     apt-get upgrade --yes
 
     # install dependencies
+    apt-get --yes install python-certbot-apache
 
     # install postgres
     apt-get --yes install postgresql postgresql-contrib 
@@ -157,18 +170,21 @@ if $postgresql_configuration; then
   echo ----
 
   echo "Please enter database name:"
-  while [[ "$DATABASE_NAME" == "" ]] do
-    read DATABASE_NAME
+  while [ "$DATABASE_NAME" == "" ]
+  do
+    read -r DATABASE_NAME
   done
 
   echo "Please enter database user name:"
-  while [[ "$DATABASE_USER" == "" ]] do
-    read POSTGRES_USER
+  while [ "$DATABASE_USER" == "" ]
+  do
+    read -r POSTGRES_USER
   done
 
   echo "Please enter database user password:"
-  while [[ "$DATABASE_PASS" == "" ]] do
-    read POSTGRES_PASS
+  while [ "$DATABASE_PASS" == "" ] 
+  do
+    read -r POSTGRES_PASS
   done
 
   CREATE_DATABASE=true
@@ -231,8 +247,9 @@ if $project_configuration; then
   echo ----
 
   echo "We need an IP address to configure Apache web server: "
-  while [[ "$SERVER_IP" == "" ]] do
-    read SERVER_IP
+  while [ "$SERVER_IP" == "" ]
+  do
+    read -r SERVER_IP
   done
  
   # configure wsgi
@@ -293,6 +310,11 @@ if $apache_configuration; then
 
   sudo service apache2 restart
 
+  # install ssl certificates
+  certbot --apache certonly
+
+  echo "REMEMBER: YOU HAVE TO UPDATE SSL CERTIFICATES EVERY THREE MONTHS"
+
   echo ----
   echo ----
   echo "Apache configuration ready"
@@ -311,15 +333,15 @@ if $django_worker_config; then
   echo ----
   echo ----
 
-  cd "$initialPATH"
-
+  cd "$INSTALLER_FOLDER"
+  echo "$PROJECT_DIR"
   # Creates the service unit file and the service script
-  sudo python rqWorkerConfig.py "$PROJECT_DEST/server"
+  sudo python rqWorkerConfig.py "$PROJECT_DIR" "$VIRTUAL_ENV_NAME"
 
   # Makes the service script executable
-  cd "$PROJECT_DEST/server/rqworkers"
+  cd "$PROJECT_DIR/rqworkers"
   sudo chmod 775 djangoRqWorkers.sh
-  cd "$initialPATH"
+  cd "$INSTALLER_FOLDER"
 
   # Enables and restarts the service
   sudo systemctl enable django-worker
