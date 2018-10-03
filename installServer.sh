@@ -271,6 +271,7 @@ if $project_configuration; then
   source "$VIRTUAL_ENV_DIR"/bin/activate
   python "$PROJECT_DIR"/manage.py migrate
   python "$PROJECT_DIR"/manage.py collectstatic
+  python "$PROJECT_DIR"/manage.py loaddata datasource communes daytypes halfhours operators timeperiods transportmodes 
 
   echo ----
   echo ----
