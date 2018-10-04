@@ -1,6 +1,17 @@
 #! /bin/bash
 
 #####################################################################
+# CONFIGURATION
+#####################################################################
+
+clone_project=false
+install_packages=false
+postgresql_configuration=false
+project_configuration=false
+apache_configuration=true
+django_worker_config=false
+
+#####################################################################
 # COMMAND LINE INPUT
 #####################################################################
 if [ -z "$1" ]; then
@@ -55,17 +66,6 @@ PROJECT_DIR="$PROJECT_PATH"/"$REPOSITORY_NAME"
 # virtual environment
 VIRTUAL_ENV_NAME="myenv"
 VIRTUAL_ENV_DIR="$PROJECT_DIR"/"$VIRTUAL_ENV_NAME"
-
-#####################################################################
-# CONFIGURATION
-#####################################################################
-
-clone_project=false
-install_packages=false
-postgresql_configuration=false
-project_configuration=false
-apache_configuration=false
-django_worker_config=true
 
 #####################################################################
 # CLONE PROJECT
@@ -246,10 +246,16 @@ if $project_configuration; then
   echo ----
   echo ----
 
-  echo "We need an IP address to configure Apache web server: "
+  echo "We need an IP address to configure ALLOWED_HOSTS in django:"
   while [ "$SERVER_IP" == "" ]
   do
     read -r SERVER_IP
+  done
+
+  echo "You need to provide a path where it will be putted downloaded files:"
+  while [ "$DOWNLOAD_PATH" == "" ]
+  do
+    read -r DOWNLOAD_PATH
   done
  
   # configure wsgi
@@ -264,12 +270,13 @@ if $project_configuration; then
   sed -i -e 's/DB_NAME=/DB_NAME='"$DATABASE_NAME"'/g' "$CONFIG_FILE"
   sed -i -e 's/DB_USER=/DB_USER='"$POSTGRES_USER"'/g' "$CONFIG_FILE"
   sed -i -e 's/DB_PASS=/DB_PASS='"$POSTGRES_PASS"'/g' "$CONFIG_FILE"
+  sed -i -e 's/DOWNLOAD_PATH=/DOWNLOAD_PATH='"$DOWNLOAD_PATH"'/g' "$CONFIG_FILE"
 
   # create folder used by loggers if not exist
   LOG_DIR="$PROJECT_DIR"/"$REPOSITORY_NAME"/logs
   sudo -u "$LINUX_USER_NAME" mkdir -p "$LOG_DIR"
   touch "$LOG_DIR"/file.log
-  chmod 777 "$LOG_DIR"/file.log
+  chmod 700 "$LOG_DIR"/file.log
 
   # add ip to allowed_hosts list
   sed -i -e 's/ALLOWED_HOSTS=/ALLOWED_HOSTS='"'$SERVER_IP'"'/g' "$CONFIG_FILE"
@@ -302,18 +309,40 @@ if $apache_configuration; then
   # configure apache 2.4
 
   cd "$INSTALLER_FOLDER"
+
+  echo "You need to provide a path where it will be putted downloaded files:"
+  while [ "$DOWNLOAD_PATH" == "" ]
+  do
+    read -r DOWNLOAD_PATH
+  done
+
   CONFIG_APACHE="fondef_viz_server.conf"
 
-  python configApache.py "$PROJECT_PATH" "$REPOSITORY_NAME" "$VIRTUAL_ENV_NAME" "$CONFIG_APACHE"
+  python configApache.py "$PROJECT_PATH" "$REPOSITORY_NAME" "$VIRTUAL_ENV_NAME" "$CONFIG_APACHE" "$LINUX_USER_NAME" "$DOWNLOAD_PATH"
   a2dissite 000-default.conf
   a2ensite "$CONFIG_APACHE"
+
+  # enable modules ssl and wsgi
+  a2enmod ssl
+  a2enmod wsgi
+
+  # add reqtime to apache2.conf // response time in apache log
+  APACHE_CONFIG_FILE="/etc/apache2/apache2.conf"
+  if grep -Fq "reqtime" "$APACHE_CONFIG_FILE"
+  then
+    echo "reqtime found in file, we do not do anything"
+  else
+    echo "reqtime does not exist in file"
+    LOG_FORMAT="LogFormat \"%h %l %u %t \\\"%r\\\" %>s %O \\\"%{Referer}i\\\" \\\"%{User-Agent}i\\\" %D\" reqtime"
+    echo "$LOG_FORMAT" >> "$APACHE_CONFIG_FILE"
+  fi
 
   sudo service apache2 restart
 
   # install ssl certificates
   certbot --apache certonly
 
-  echo "REMEMBER: YOU HAVE TO UPDATE SSL CERTIFICATES EVERY THREE MONTHS"
+  echo "REMEMBER: YOU HAVE TO UPDATE SSL CERTIFICATES EVERY THREE MONTHS. YOU CAN USE 'certbot renew' IN CRON"
 
   echo ----
   echo ----

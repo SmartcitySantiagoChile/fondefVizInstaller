@@ -1,115 +1,79 @@
 import sys
 import os
 
-def getConfigFileHTTP(projectPath, projectName, virtualEnvName):
-    projectDir = "{}/{}".format(projectPath, projectName)
+def get_config_http_file(project_path, project_name, virtual_env_name, linux_user_name, download_path):
+    project_dir = '{}/{}'.format(project_path, project_name)
     return '''
-    WSGIApplicationGroup %{GLOBAL}
-    WSGIDaemonProcess ''' + projectName + ''' python-path=''' + projectDir + ''' python-home=''' + projectDir + '''/''' + virtualEnvName + ''' processes=3 threads=100 display-name='srvr-fondef' user='server' group='server'
 
-    <VirtualHost *:80>
-        # The ServerName directive sets the request scheme, hostname and port that
-        # the server uses to identify itself. This is used when creating
-        # redirection URLs. In the context of virtual hosts, the ServerName
-        # specifies what hostname must appear in the request's Host: header to
-        # match this virtual host. For the default virtual host (this file) this
-        # value is not decisive as it is used as a last resort host regardless.
-        # However, you must set it for any further virtual host explicitly.
-        #ServerName www.example.com
+LoadModule wsgi_module /usr/lib/apache2/modules/mod_wsgi.so
+LoadModule ssl_module /usr/lib/apache2/modules/mod_ssl.so
 
-        #ServerAdmin webmaster@localhost
-        #DocumentRoot /var/www/html
+WSGIApplicationGroup %{GLOBAL}
+WSGIDaemonProcess ''' + project_name + ''' python-path=''' + project_dir + ''' python-home=''' + project_dir + '''/''' + virtual_env_name + ''' processes=3 threads=100 display-name='srvr-adatrap' user="''' + linux_user_name + '''" group="''' + linux_user_name + '''"
 
-        Alias /static ''' + projectDir + '''/static
-        <Directory ''' + projectDir + '''/static>
-                Require all granted
-        </Directory>
+<VirtualHost *:80>
+    ServerName adatrap.cl
+    ServerAlias www.adatrap.cl
 
-        <Directory ''' + projectDir + '''/''' + projectName + '''>
-                <Files wsgi.py>
-                      Require all granted
-                </Files>
-        </Directory>
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log reqtime
 
-        LoadModule wsgi_module /usr/lib/apache2/modules/mod_wsgi.so
-
-        WSGIProcessGroup ''' + projectName + '''
-        WSGIScriptAlias / ''' + projectDir + '''/''' + projectName + '''/wsgi.py
-
-        # Available loglevels: trace8, ..., trace1, debug, info, notice, warn,
-        # error, crit, alert, emerg.
-        # It is also possible to configure the loglevel for particular
-        # modules, e.g.
-        #LogLevel info ssl:warn
-
-        ErrorLog ${APACHE_LOG_DIR}/error.log
-        CustomLog ${APACHE_LOG_DIR}/access.log reqtime
-
-        # For most configuration files from conf-available/, which are
-        # enabled or disabled at a global level, it is possible to
-        # include a line for only one particular virtual host. For example the
-        # following line enables the CGI configuration for this host only
-        # after it has been globally disabled with "a2disconf".
-        #Include conf-available/serve-cgi-bin.conf
-    </VirtualHost>
+    Redirect permanent / https://www.adatrap.cl/
+</VirtualHost>
     
+<VirtualHost *:443>
+    ServerName adatrap.cl
+    ServerAlias www.adatrap.cl
 
-    <IfModule mod_ssl.c>
-        <VirtualHost *:443>
-            # como es usado por un proxy, necesitamos conectarnos a traves de la ip
-            ServerName adatrap.cl
-            ServerAlias www.adatrap.cl
+    SSLCertificateFile /etc/letsencrypt/live/adatrap.cl/cert.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/adatrap.cl/privkey.pem
+    Include /etc/letsencrypt/options-ssl-apache.conf
+    SSLCertificateChainFile /etc/letsencrypt/live/adatrap.cl/chain.pem
 
-            SSLCertificateFile /etc/letsencrypt/live/adatrap.cl/cert.pem
-            SSLCertificateKeyFile /etc/letsencrypt/live/adatrap.cl/privkey.pem
-            Include /etc/letsencrypt/options-ssl-apache.conf
-            SSLCertificateChainFile /etc/letsencrypt/live/adatrap.cl/chain.pem
+    Alias /static ''' + project_dir + '''/static
+    <Directory ''' + project_dir + '''/static>
+        Require all granted
+    </Directory>
 
-            Alias /static ''' + projectDir + '''/static
-            <Directory ''' + projectDir + '''/static>
-                Require all granted
-            </Directory>
+    <Directory ''' + project_dir + '''/''' + project_name + '''>
+        <Files wsgi.py>
+            Require all granted
+        </Files>
+    </Directory>
 
-            <Directory ''' + projectDir + '''/''' + projectName + '''>
-                <Files wsgi.py>
-                      Require all granted
-                </Files>
-            </Directory>
-
-            Alias /downloads /es2/downloads
-            <Directory /es2/downloads>
-                Require all granted
-            <Directory>
+    Alias /downloads ''' + download_path + '''
+    <Directory ''' + download_path + '''>
+        Require all granted
+    </Directory>
             
-            LoadModule wsgi_module /usr/lib/apache2/modules/mod_wsgi.so
+    WSGIProcessGroup ''' + project_name + '''
+    WSGIScriptAlias / ''' + project_dir + '''/''' + project_name + '''/wsgi.py
 
-            WSGIProcessGroup ''' + projectName + '''
-            WSGIScriptAlias / ''' + projectDir + '''/''' + projectName + '''/wsgi.py
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log reqtime
+</VirtualHost>'''
 
-            ErrorLog ${APACHE_LOG_DIR}/error.log
-            CustomLog ${APACHE_LOG_DIR}/access.log reqtime
-       </VirtualHost>   
-    </IfModule>'''
+def process_apache_config_file(project_path, project_name, virtual_env_name, apache_file_name, linux_user_name, download_path):
 
-def processApacheConfigFile(projectPath, projectName, virtualEnvName, apacheFileName):
-
-    configFile = getConfigFileHTTP(projectPath, projectName, virtualEnvName)
+    config_file = get_config_http_file(project_path, project_name, virtual_env_name, linux_user_name, download_path)
 
     #Writte the file to destination
-    PATH = '/etc/apache2/sites-available/'
-    pathFile = "{}{}".format(PATH, apacheFileName)
+    path = '/etc/apache2/sites-available/'
+    path_file = "{}{}".format(path, apache_file_name)
 
-    FILE = open(pathFile, 'w')
-    for line in configFile:
+    FILE = open(path_file, 'w')
+    for line in config_file:
         FILE.write(line)
     FILE.close()
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        pass
+    if len(sys.argv) < 7:
+        raise ValueError('You need to provide more parameters')
     else:
-        projectPath = sys.argv[1]
-        projectName = sys.argv[2]
-        virtualEnvName = sys.argv[3]
-        apacheFileName = sys.argv[4]
-        processApacheConfigFile(projectPath, projectName, virtualEnvName, apacheFileName)
+        project_path = sys.argv[1]
+        project_name = sys.argv[2]
+        virtual_env_name = sys.argv[3]
+        apache_file_name = sys.argv[4]
+        linux_user_name = sys.argv[5]
+        download_path = sys.argv[6]
+        process_apache_config_file(project_path, project_name, virtual_env_name, apache_file_name, linux_user_name, download_path)
