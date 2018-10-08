@@ -58,6 +58,7 @@ if id "$LINUX_USER_NAME" >/dev/null 2>&1; then
 else
     echo "User $LINUX_USER_NAME does not exists.. CREATING!"
     adduser "$LINUX_USER_NAME"
+    adduser "$LINUX_USER_NAME" sudo
 fi
 
 PROJECT_PATH=/home/"$LINUX_USER_NAME"
